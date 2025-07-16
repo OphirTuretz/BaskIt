@@ -1,42 +1,27 @@
 name: BaskIt
-description: >
-  BaskIt is an AI-powered grocery shopping assistant built with Python and Streamlit.
-  It helps users collect grocery items via free text, voice, or images, and manage
-  their shopping list in a modular, multilingual environment (Hebrew UI). The app
-  supports shared lists, user preferences, undo history, and optional online ordering
-  from Hebrew supermarket sites.
+description: AI-powered grocery shopping app with Hebrew support
 
-tech_stack:
-  - Python 3.x
-  - Streamlit (RTL Hebrew UI)
-  - SQLite + SQLAlchemy
-  - loguru for structured logging
-  - python-dotenv for config
-  - Google Auth (future)
-  - Mocked API calls (OpenAI, Whisper, OCR), toggled via `.env`
+dependencies:
+  python: "3.11"
+  packages:
+    - streamlit==1.32.2
+    - python-dotenv==1.0.1
+    - loguru==0.7.2
+    - pytest==8.1.1
 
-guidelines:
-  - Use modular architecture: `ai/`, `services/`, `db/`, `utils/`, `pages/`, etc.
-  - Always start features using mocked APIs, replaceable with real ones via config
-  - All product and list data is in Hebrew
-  - Use grounded, up-to-date official documentation for all libraries
-  - Implement structured logging with `loguru`, to both file and console
-  - Each development step should be approved before moving to the next one
-  - All modules should include basic unit tests from the start using `pytest`
-  - Use the `tests/` folder with a structure that mirrors the main codebase (e.g., `test_services/`, `test_ai/`, etc.)
-  - Test mocked behavior first and ensure it's consistent with intended production behavior
-  - Tests are part of every development step and must pass before adding features
+development:
+  linting:
+    enabled: true
+    tools:
+      - black
+      - flake8
+      - mypy
+  testing:
+    framework: pytest
+    directory: tests/
 
-phases:
-  - Phase 1: Build a working skeleton with mock pipelines and Streamlit UI
-  - Phase 2: Add real list management and AI parsing
-  - Phase 3: Connect image/voice input
-  - Phase 4: Add sharing, preferences, undo, and supermarket integration
-
-testing:
-  framework: pytest
-  structure: mirrored folder layout under `tests/`
-  notes:
-    - All mocked APIs must be testable in isolation
-    - Real API calls will be covered later with integration tests
-    - CI via GitHub Actions is encouraged once tests grow
+environment:
+  variables:
+    - USE_MOCK_APIS
+    - LOG_LEVEL
+    - LOG_FILE
