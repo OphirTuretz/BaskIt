@@ -22,9 +22,21 @@ guidelines:
   - Use grounded, up-to-date official documentation for all libraries
   - Implement structured logging with `loguru`, to both file and console
   - Each development step should be approved before moving to the next one
+  - All modules should include basic unit tests from the start using `pytest`
+  - Use the `tests/` folder with a structure that mirrors the main codebase (e.g., `test_services/`, `test_ai/`, etc.)
+  - Test mocked behavior first and ensure it's consistent with intended production behavior
+  - Tests are part of every development step and must pass before adding features
 
 phases:
   - Phase 1: Build a working skeleton with mock pipelines and Streamlit UI
   - Phase 2: Add real list management and AI parsing
   - Phase 3: Connect image/voice input
   - Phase 4: Add sharing, preferences, undo, and supermarket integration
+
+testing:
+  framework: pytest
+  structure: mirrored folder layout under `tests/`
+  notes:
+    - All mocked APIs must be testable in isolation
+    - Real API calls will be covered later with integration tests
+    - CI via GitHub Actions is encouraged once tests grow
