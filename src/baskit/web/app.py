@@ -1,8 +1,8 @@
 """BaskIt - AI-powered grocery shopping assistant."""
 import streamlit as st
-from ai.text_to_item import parse_text_to_item
-from services.list_manager import add_item, get_list, remove_item
-from utils.logger import get_logger
+from baskit.ai.text_to_item import parse_text_to_item
+from baskit.services.list_manager import add_item, get_list, remove_item
+from baskit.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -16,13 +16,84 @@ st.set_page_config(
 # Add custom CSS for RTL support
 st.markdown("""
     <style>
-        .stTextInput input {
+        /* RTL support for all text */
+        .stTextInput input, .stMarkdown, div[data-testid="stText"] {
             direction: rtl;
             text-align: right;
         }
-        .st-emotion-cache-1y4p8pa {
+        
+        /* RTL for success/info messages */
+        .stSuccess, .stInfo {
             direction: rtl;
             text-align: right;
+        }
+        
+        /* RTL for headers */
+        h1, h2, h3 {
+            direction: rtl;
+            text-align: right !important;
+        }
+        
+        /* Fix columns layout for RTL */
+        [data-testid="column"] {
+            direction: rtl;
+            text-align: right;
+            padding: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+        }
+
+        /* Container for list items */
+        div[data-testid="stHorizontalBlock"] {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.5rem;
+            border-radius: 4px;
+            margin: 0.25rem 0;
+            align-items: center !important;
+        }
+        
+        /* Align buttons to the left in RTL context */
+        button[kind="secondary"] {
+            float: left;
+            margin: 0 !important;
+        }
+        
+        /* Fix input placeholder */
+        .stTextInput input::placeholder {
+            text-align: right;
+        }
+        
+        /* Fix overall page layout */
+        .main {
+            direction: rtl;
+        }
+
+        /* Force text alignment in columns */
+        [data-testid="column"] > div {
+            text-align: right !important;
+            width: 100%;
+            margin: 0 !important;
+            padding: 0 1rem !important;
+        }
+
+        /* Remove extra paragraph margins */
+        [data-testid="column"] p {
+            margin: 0 !important;
+        }
+
+        /* Ensure delete button aligns left */
+        [data-testid="column"]:nth-child(3) {
+            justify-content: center !important;
+        }
+
+        /* Ensure confidence aligns center */
+        [data-testid="column"]:nth-child(2) {
+            justify-content: center !important;
+        }
+
+        /* Ensure item text aligns right */
+        [data-testid="column"]:nth-child(1) {
+            justify-content: flex-end !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -52,12 +123,16 @@ if not current_list:
     st.info("הרשימה ריקה - התחל להוסיף פריטים!")
 else:
     for idx, item in enumerate(current_list):
-        col1, col2, col3 = st.columns([3, 1, 0.5])
-        with col1:
-            st.write(f"{item['item']} - {item['quantity']} {item['unit']}")
-        with col2:
-            st.write(f"ביטחון: {item['confidence']:.0%}")
-        with col3:
-            if st.button("❌", key=f"remove_{idx}"):
-                remove_item(idx)
-                st.rerun() 
+        # Create columns with proper spacing
+        cols = st.columns([3, 1, 0.5])
+        
+        # Item name and quantity (right)
+        cols[0].write(f"{item['item']} - {item['quantity']} {item['unit']}")
+        
+        # Confidence (center)
+        cols[1].write(f"ביטחון: {item['confidence']:.0%}")
+        
+        # Delete button (left)
+        if cols[2].button("❌", key=f"remove_{idx}"):
+            remove_item(idx)
+            st.rerun() 
