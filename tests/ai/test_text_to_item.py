@@ -1,5 +1,5 @@
 """Tests for the text-to-item parser."""
-from ai.text_to_item import parse_text_to_item
+from baskit.ai.text_to_item import parse_text_to_item
 
 def test_parse_text_to_item_basic():
     """Test basic text parsing with a simple Hebrew input."""

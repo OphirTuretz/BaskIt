@@ -1,5 +1,5 @@
 """Tests for the list manager service."""
-from services.list_manager import add_item, remove_item, get_list
+from baskit.services.list_manager import add_item, remove_item, get_list
 
 def test_add_and_get_item():
     """Test adding an item and retrieving the list."""

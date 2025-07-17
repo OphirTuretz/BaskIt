@@ -1,7 +1,7 @@
 """Logging configuration for BaskIt using loguru."""
 import sys
 from loguru import logger
-from config import LOG_LEVEL, LOG_FILE
+from baskit.config import LOG_LEVEL, LOG_FILE
 
 # Remove default handler
 logger.remove()

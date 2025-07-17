@@ -1,6 +1,6 @@
 """Mock implementation of text-to-item parsing."""
 from typing import Dict, Any
-from utils.logger import get_logger
+from baskit.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

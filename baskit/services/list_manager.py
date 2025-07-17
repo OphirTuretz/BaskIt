@@ -1,6 +1,6 @@
 """In-memory grocery list management service."""
 from typing import Dict, List, Any
-from utils.logger import get_logger
+from baskit.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
