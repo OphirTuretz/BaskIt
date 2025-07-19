@@ -1,0 +1,58 @@
+[
+  {
+    "id": 1,
+    "name_en": "Milk 1L",
+    "name_he": "חלב 1 ליטר",
+    "icon": "milk.png",
+    "favorite": false,
+    "dietary_tags": ["vegetarian"],
+    "price_per_chain": {
+      "Shufersal": 6.5,
+      "Rami Levi": 6.0,
+      "Victory": 6.2,
+      "Tiv-Ta'am": 7.0
+    }
+  },
+  {
+    "id": 2,
+    "name_en": "Bread Whole Wheat",
+    "name_he": "לחם חיטה מלאה",
+    "icon": "bread.png",
+    "favorite": false,
+    "dietary_tags": ["vegan"],
+    "price_per_chain": {
+      "Shufersal": 8.0,
+      "Rami Levi": 7.5,
+      "Victory": 7.8,
+      "Tiv-Ta'am": 8.5
+    }
+  },
+  {
+    "id": 3,
+    "name_en": "Eggs 12-pack",
+    "name_he": "ביצים 12 יחידות",
+    "icon": "eggs.png",
+    "favorite": false,
+    "dietary_tags": ["vegetarian", "gluten-free"],
+    "price_per_chain": {
+      "Shufersal": 12.0,
+      "Rami Levi": 11.0,
+      "Victory": 11.5,
+      "Tiv-Ta'am": 13.0
+    }
+  },
+  {
+    "id": 4,
+    "name_en": "Tomato 1kg",
+    "name_he": "עגבניה 1 ק\"ג",
+    "icon": "tomato.png",
+    "favorite": false,
+    "dietary_tags": ["vegan", "gluten-free"],
+    "price_per_chain": {
+      "Shufersal": 5.0,
+      "Rami Levi": 4.5,
+      "Victory": 4.8,
+      "Tiv-Ta'am": 5.5
+    }
+  }
+] 
