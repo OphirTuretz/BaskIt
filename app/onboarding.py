@@ -1,6 +1,11 @@
 import streamlit as st
 
 def show_onboarding(user):
+    # Skip onboarding if user already exists in session_state['users']
+    if 'users' in st.session_state and user['username'] in st.session_state['users']:
+        st.session_state['user'] = st.session_state['users'][user['username']]
+        st.session_state['onboarded'] = True
+        return False
     if st.session_state.get('onboarded'):
         return False
     st.title("Welcome to Groceries App!")
@@ -26,6 +31,10 @@ def show_onboarding(user):
             'dietary': dietary,
             'default_list': default_list
         })
+        # Always save user to users dict
+        if 'users' not in st.session_state:
+            st.session_state['users'] = {}
+        st.session_state['users'][user['username']] = st.session_state['user']
         return False
     return True
 

@@ -26,8 +26,9 @@ if not user:
     st.stop()
 
 # Onboarding/settings (first time)
-if onboarding.show_onboarding(user):
-    st.stop()
+if not st.session_state.get('onboarded', False):
+    if onboarding.show_onboarding(user):
+        st.stop()
 
 # Main page routing
 if selected == "Shopping List":
