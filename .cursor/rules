@@ -1,0 +1,4 @@
+{
+  "always_use": "OpenAI Chat API if available; fallback to simple rule-based logic.",
+  "default_parsing_behavior": "return action, item, quantity in JSON from natural language"
+} 
