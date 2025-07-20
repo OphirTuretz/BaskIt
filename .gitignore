@@ -1,3 +1,9 @@
+# macOS
+.DS_Store
+
+# Database
+*.db
+
 logs/
 
 # Byte-compiled / optimized / DLL files
