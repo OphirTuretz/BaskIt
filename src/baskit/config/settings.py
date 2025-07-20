@@ -5,6 +5,10 @@ from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+# Get project root directory (2 levels up from this file)
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+
+
 class BaskItSettings(BaseSettings):
     """Application settings with environment variable support."""
     
@@ -35,10 +39,18 @@ class BaskItSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="BASKIT_",
         case_sensitive=False,
-        env_file=".env",
+        env_file=PROJECT_ROOT / ".env",
         env_file_encoding="utf-8",
         extra="ignore"
     )
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Convert relative DB path to absolute path from project root
+        if self.DB_URL.startswith("sqlite:///"):
+            relative_path = self.DB_URL.replace("sqlite:///", "")
+            absolute_path = PROJECT_ROOT / relative_path
+            self.DB_URL = f"sqlite:///{absolute_path}"
 
 
 @lru_cache()

@@ -60,6 +60,10 @@ def render_list_display(
     # Display unbought items first
     if unbought_items:
         st.subheader("פריטים לקנייה")
+        
+        # Container for error messages
+        error_placeholder = st.empty()
+        
         for item in unbought_items:
             with st.container():
                 # Use a single row of columns for the item, reordered buttons
@@ -78,7 +82,8 @@ def render_list_display(
                         if result.success:
                             st.rerun()
                         else:
-                            render_feedback(result.error, type_="error")
+                            with error_placeholder:
+                                render_feedback(result.error, type_="error")
                 
                 with dec_col:
                     if st.button(
@@ -92,13 +97,15 @@ def render_list_display(
                         )
                         if result.success:
                             if result.message:  # Item was removed
-                                render_feedback(
-                                    result.message,
-                                    type_="info"
-                                )
+                                with error_placeholder:
+                                    render_feedback(
+                                        result.message,
+                                        type_="info"
+                                    )
                             st.rerun()
                         else:
-                            render_feedback(result.error, type_="error")
+                            with error_placeholder:
+                                render_feedback(result.error, type_="error")
                 
                 with buy_col:
                     if st.button(
@@ -110,7 +117,8 @@ def render_list_display(
                         if result.success:
                             st.rerun()
                         else:
-                            render_feedback(result.error, type_="error")
+                            with error_placeholder:
+                                render_feedback(result.error, type_="error")
                 
                 with del_col:
                     if st.button(
@@ -122,11 +130,15 @@ def render_list_display(
                         if result.success:
                             st.rerun()
                         else:
-                            render_feedback(result.error, type_="error")
+                            with error_placeholder:
+                                render_feedback(result.error, type_="error")
     
     # Display bought items in a collapsible section
     if bought_items:
         with st.expander("פריטים שנקנו"):
+            # Container for error messages in bought items section
+            bought_error_placeholder = st.empty()
+            
             for item in bought_items:
                 name_col, action_col = st.columns([4, 1])
                 with name_col:
@@ -144,4 +156,5 @@ def render_list_display(
                         if result.success:
                             st.rerun()
                         else:
-                            render_feedback(result.error, type_="error") 
+                            with bought_error_placeholder:
+                                render_feedback(result.error, type_="error") 

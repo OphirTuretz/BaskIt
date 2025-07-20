@@ -13,12 +13,28 @@ def render_add_item(item_service: ItemService, list_id: int) -> None:
         item_service: Service for managing items
         list_id: ID of the list to add items to
     """
-    # Add custom CSS to reverse number input buttons
+    # Add custom CSS for number input styling
     st.markdown("""
         <style>
-        /* Reverse the order of increment/decrement buttons */
+        /* Show and style number input spinners */
+        input[type="number"] {
+            -webkit-appearance: textfield !important;
+            -moz-appearance: textfield !important;
+            appearance: textfield !important;
+        }
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: auto !important;
+            opacity: 1 !important;
+            margin-left: 0.5rem !important;
+        }
+        /* Reverse the order of increment/decrement buttons for RTL */
         .stNumberInput div[data-baseweb="input-spinner"] div {
-            flex-direction: row-reverse;
+            flex-direction: row-reverse !important;
+        }
+        /* Fix number input width */
+        .stNumberInput {
+            width: 100% !important;
         }
         </style>
     """, unsafe_allow_html=True)

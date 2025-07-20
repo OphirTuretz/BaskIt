@@ -16,6 +16,21 @@ def render_feedback(
         type_: Type of message ('success', 'error', or 'info')
         suggestions: Optional list of suggestion buttons to display
     """
+    # Add custom CSS for RTL text direction
+    st.markdown("""
+        <style>
+        .stAlert {
+            direction: rtl;
+        }
+        .stAlert > div {
+            flex-direction: row-reverse;
+        }
+        .stAlert > div > div {
+            text-align: right;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
     if type_ == "success":
         st.success(message)
     elif type_ == "error":
@@ -25,4 +40,4 @@ def render_feedback(
         
     if suggestions:
         for suggestion in suggestions:
-            st.button(suggestion) 
+            st.button(suggestion)
