@@ -51,13 +51,22 @@ def render_add_item(item_service: ItemService, list_id: int) -> None:
             )
             
             if result.success:
-                render_feedback(
-                    f"הפריט {name} נוסף בהצלחה",
-                    type_="success"
-                )
+                # Store success message in session state
+                if 'success_message' not in st.session_state:
+                    st.session_state.success_message = []
+                st.session_state.success_message.append(f"הפריט {name} נוסף בהצלחה")
+                # Force rerun to refresh the list
+                st.rerun()
             else:
                 render_feedback(
                     result.error,
                     type_="error",
                     suggestions=result.suggestions
-                ) 
+                )
+    
+    # Display success messages after form rerun
+    if 'success_message' in st.session_state and st.session_state.success_message:
+        for message in st.session_state.success_message:
+            render_feedback(message, type_="success")
+        # Clear messages after displaying
+        st.session_state.success_message = [] 
