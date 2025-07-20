@@ -16,21 +16,30 @@ DEFAULT_LOG_FILE = DEFAULT_LOG_DIR / "baskit.log"
 class OpenAISettings(BaseSettings):
     """OpenAI-specific settings."""
     API_KEY: str = "your_api_key_here"
-    MODEL: str = "gpt-4"
-    TEMPERATURE: float = 0.7
+    MODEL: str = "gpt-4o-mini"
+    TEMPERATURE: float = 0.0  # Zero temperature for maximum confidence and deterministic responses
     MAX_RETRIES: int = 3
     TIMEOUT: int = 10
     MAX_TOKENS: int = 150
 
     model_config = SettingsConfigDict(
         env_prefix="OPENAI_",
-        case_sensitive=False
+        case_sensitive=False,
+        env_file=PROJECT_ROOT / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore"
     )
 
     @validator("TEMPERATURE")
     def validate_temperature(cls, v: float) -> float:
         if not 0 <= v <= 1:
             raise ValueError("Temperature must be between 0 and 1")
+        return v
+
+    @validator("API_KEY")
+    def validate_api_key(cls, v: str) -> str:
+        if v == "your_api_key_here":
+            raise ValueError("OpenAI API key not configured")
         return v
 
 
@@ -69,7 +78,7 @@ class BaskItSettings(BaseSettings):
     AUTO_MERGE_SIMILAR: bool = True
     
     # Tool Settings
-    TOOL_CONFIDENCE_THRESHOLD: float = 0.8
+    TOOL_CONFIDENCE_THRESHOLD: float = 0.6  # Lowered from 0.8 to better match actual confidence scores
     TOOL_TIMEOUT: int = 5
     
     # Error Handling
@@ -174,4 +183,11 @@ def get_openai_settings() -> OpenAISettings:
 @lru_cache()
 def get_streamlit_settings() -> StreamlitSettings:
     """Get cached Streamlit settings instance."""
-    return StreamlitSettings() 
+    return StreamlitSettings()
+
+
+def clear_settings_cache() -> None:
+    """Clear all settings caches to force reload from environment."""
+    get_settings.cache_clear()
+    get_openai_settings.cache_clear()
+    get_streamlit_settings.cache_clear() 

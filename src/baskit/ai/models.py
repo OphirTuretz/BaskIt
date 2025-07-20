@@ -7,7 +7,7 @@ from baskit.domain.types import HebrewText
 
 class GPTConfig(BaseModel):
     """Configuration for GPT calls."""
-    model: str = "gpt-4"
+    model: str = "gpt-4o-mini"
     temperature: float = Field(default=0.7, ge=0.0, le=1.0)
     max_retries: int = Field(default=3, ge=1, le=5)
     timeout: int = Field(default=10, ge=5, le=30)
@@ -15,7 +15,7 @@ class GPTConfig(BaseModel):
     @field_validator('model')
     @classmethod
     def validate_model(cls, v: str) -> str:
-        allowed_models = ['gpt-4', 'gpt-3.5-turbo']
+        allowed_models = ['gpt-4', 'gpt-3.5-turbo', 'gpt-4o-mini']
         if v not in allowed_models:
             raise ValueError(f"מודל חייב להיות אחד מ: {', '.join(allowed_models)}")
         return v
@@ -56,11 +56,13 @@ class ToolCall(BaseModel):
     @classmethod
     def validate_name(cls, v: str) -> str:
         allowed_tools = {
-            'add_item', 'remove_item', 'update_quantity',
-            'mark_bought', 'create_list', 'show_list'
+            'add_item', 'update_quantity', 'increment_quantity',
+            'reduce_quantity', 'remove_item', 'mark_bought',
+            'create_list', 'delete_list', 'show_list',
+            'set_default_list', 'no_op'
         }
         if v not in allowed_tools:
-            raise ValueError(f"שם הכלי חייב להיות אחד מ: {', '.join(allowed_tools)}")
+            raise ValueError(f"Tool name must be one of: {', '.join(sorted(allowed_tools))}")
         return v
 
 

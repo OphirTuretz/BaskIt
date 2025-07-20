@@ -1,10 +1,12 @@
 """Integration tests for GPT and tool execution."""
 import pytest
-from unittest.mock import ANY, patch
+from unittest.mock import ANY, patch, AsyncMock
 from openai.types.chat import ChatCompletionMessage
 
-from baskit.ai.errors import APIError, ValidationError, ToolExecutionError
+from baskit.ai.errors import APIError, ValidationError, ToolExecutionError, ToolExecutionResult
 from baskit.services.base_service import Result
+from baskit.web.app import process_smart_input
+from baskit.ai.models import GPTContext
 
 
 @pytest.mark.asyncio
@@ -280,3 +282,103 @@ async def test_end_to_end_flow(
     assert tool_result.data['item']['name'] == 'חלב'
     assert tool_result.data['item']['quantity'] == 1
     assert tool_result.data['item']['unit'] == 'יחידה' 
+
+
+@pytest.fixture
+def mock_streamlit():
+    """Mock Streamlit session state."""
+    with patch('streamlit.session_state') as mock_state:
+        mock_state.session_id = 'test_session'
+        yield mock_state
+
+@pytest.mark.asyncio
+async def test_smart_input_processing_success(mocker, mock_streamlit):
+    """Test successful processing of smart input."""
+    # Arrange
+    mock_gpt = mocker.Mock()
+    mock_gpt.call_with_tools = AsyncMock(return_value=ToolExecutionResult(
+        success=True,
+        message="הוספתי טופו לרשימה",
+        data={"item": {"name": "טופו", "quantity": 1}}
+    ))
+    
+    # Act
+    result = await process_smart_input(
+        user_input="טופו",
+        current_list="רשימת קניות",
+        gpt_handler=mock_gpt
+    )
+    
+    # Assert
+    assert result.success
+    assert "טופו" in result.message
+    mock_gpt.call_with_tools.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_smart_input_processing_failure(mocker, mock_streamlit):
+    """Test failed processing of smart input."""
+    # Arrange
+    mock_gpt = mocker.Mock()
+    mock_gpt.call_with_tools = AsyncMock(return_value=ToolExecutionResult(
+        success=False,
+        message="לא הצלחתי להבין את הבקשה",
+        suggestions=["נסה לכתוב בעברית בלבד"]
+    ))
+    
+    # Act
+    result = await process_smart_input(
+        user_input="milk",  # Non-Hebrew input
+        current_list="רשימת קניות",
+        gpt_handler=mock_gpt
+    )
+    
+    # Assert
+    assert not result.success
+    assert len(result.suggestions) > 0
+    mock_gpt.call_with_tools.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_smart_input_processing_error(mocker, mock_streamlit):
+    """Test error handling in smart input processing."""
+    # Arrange
+    mock_gpt = mocker.Mock()
+    mock_gpt.call_with_tools = AsyncMock(side_effect=Exception("Test error"))
+    
+    # Act
+    result = await process_smart_input(
+        user_input="טופו",
+        current_list="רשימת קניות",
+        gpt_handler=mock_gpt
+    )
+    
+    # Assert
+    assert not result.success
+    assert "שגיאה" in result.message
+    assert len(result.suggestions) > 0
+    mock_gpt.call_with_tools.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_smart_input_with_context(mocker, mock_streamlit):
+    """Test smart input processing with list context."""
+    # Arrange
+    mock_gpt = mocker.Mock()
+    mock_gpt.call_with_tools = AsyncMock(return_value=ToolExecutionResult(
+        success=True,
+        message="הוספתי טופו לרשימת שבת",
+        data={"item": {"name": "טופו", "quantity": 1}}
+    ))
+    
+    # Act
+    result = await process_smart_input(
+        user_input="טופו",
+        current_list="רשימת שבת",
+        gpt_handler=mock_gpt
+    )
+    
+    # Assert
+    assert result.success
+    assert "רשימת שבת" in result.message
+    mock_gpt.call_with_tools.assert_called_once()
+    # Verify context was passed
+    context = mock_gpt.call_with_tools.call_args[0][1]
+    assert context.current_list == "רשימת שבת" 
