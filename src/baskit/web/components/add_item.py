@@ -13,6 +13,16 @@ def render_add_item(item_service: ItemService, list_id: int) -> None:
         item_service: Service for managing items
         list_id: ID of the list to add items to
     """
+    # Add custom CSS to reverse number input buttons
+    st.markdown("""
+        <style>
+        /* Reverse the order of increment/decrement buttons */
+        .stNumberInput div[data-baseweb="input-spinner"] div {
+            flex-direction: row-reverse;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
     st.subheader("הוסף פריט")
     
     with st.form("add_item", clear_on_submit=True):
