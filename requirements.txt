@@ -15,4 +15,7 @@ factory-boy>=3.3.0
 
 # Type checking
 mypy>=1.8.0
-sqlalchemy[mypy]>=2.0.0 
+sqlalchemy[mypy]>=2.0.0
+
+# Web UI
+streamlit>=1.32.0 
