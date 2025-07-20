@@ -19,7 +19,7 @@ BaskIt is a modern grocery list management application that leverages AI to unde
 
 1. Clone the repository:
    ```bash
-   git clone [your-repo-url]
+   git clone https://github.com/OphirTuretz/BaskIt.git
    cd BaskIt
    ```
 
