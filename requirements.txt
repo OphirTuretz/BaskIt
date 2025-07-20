@@ -1,4 +1,18 @@
-streamlit==1.32.2
-python-dotenv==1.0.1
-loguru==0.7.2
-pytest==8.1.1 
+# Database
+SQLAlchemy>=2.0.0
+alembic>=1.13.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# Utilities
+python-dotenv>=1.0.0
+loguru>=0.7.2
+
+# Testing
+pytest>=8.0.0
+pytest-cov>=4.1.0
+factory-boy>=3.3.0
+
+# Type checking
+mypy>=1.8.0
+sqlalchemy[mypy]>=2.0.0 
