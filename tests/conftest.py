@@ -6,6 +6,8 @@ from sqlalchemy.engine import Engine
 import sqlite3
 
 from baskit.models import Base, User, GroceryList, GroceryItem
+from baskit.services.list_service import ListService
+from baskit.services.item_service import ItemService
 
 
 @pytest.fixture(scope="session")
@@ -73,6 +75,18 @@ def user(session) -> User:
     session.commit()
     session.refresh(user)
     return user
+
+
+@pytest.fixture
+def list_service(session, user):
+    """Create a list service instance."""
+    return ListService(session, user.id)
+
+
+@pytest.fixture
+def item_service(session, user):
+    """Create an item service instance."""
+    return ItemService(session, user.id)
 
 
 @pytest.fixture

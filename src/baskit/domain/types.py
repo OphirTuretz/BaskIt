@@ -45,27 +45,29 @@ class HebrewText(str):
         _handler: Any
     ) -> CoreSchema:
         """Get Pydantic core schema for validation."""
+        def validate_hebrew(value: str) -> 'HebrewText':
+            return cls(value)
+            
         return core_schema.json_or_python_schema(
             json_schema=core_schema.str_schema(),
-            python_schema=core_schema.union_schema([
-                core_schema.is_instance_schema(cls),
-                core_schema.no_info_plain_validator_function(cls)
-            ]),
+            python_schema=core_schema.no_info_after_validator_function(validate_hebrew, core_schema.str_schema()),
             serialization=core_schema.plain_serializer_function_ser_schema(str)
         )
 
 
 class Quantity(BaseModel):
     """Represents a quantity with an optional unit."""
-    value: Annotated[int, Field(ge=0, le=99)]
+    value: Annotated[int, Field(gt=0, le=99)]
     unit: Annotated[str, Field(min_length=1, max_length=20)] = "יחידה"
 
     @field_validator('value')
     @classmethod
     def value_must_be_positive(cls, v: int) -> int:
         """Validate that quantity is positive."""
-        if v < 0:
+        if v <= 0:
             raise ValueError('כמות חייבת להיות חיובית')
+        if v > 99:
+            raise ValueError('כמות לא יכולה להיות גדולה מ-99')
         return v
 
 

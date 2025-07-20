@@ -2,8 +2,8 @@
 import pytest
 from datetime import datetime, UTC
 
-from baskit.services.list_service import ListService
-from baskit.models import GroceryList
+from baskit.services.list_service import ListService, ListContents, ListSummary
+from baskit.models import GroceryList, GroceryItem
 
 
 @pytest.fixture
@@ -219,3 +219,209 @@ def test_get_lists(list_service):
     all_lists_result = list_service.get_lists(include_deleted=True)
     assert all_lists_result.success
     assert len(all_lists_result.data) == 2 
+
+
+def test_show_list(list_service, item_service):
+    """Test showing list contents."""
+    # Create list with items
+    list_result = list_service.create_list("רשימת קניות")
+    assert list_result.success
+    list_id = list_result.data.id
+    
+    # Add items
+    item1_result = item_service.add_item(list_id, "חלב", 1, "ליטר")
+    assert item1_result.success
+    
+    item2_result = item_service.add_item(list_id, "לחם", 2, "יחידה")
+    assert item2_result.success
+    
+    # Show list
+    result = list_service.show_list(list_id)
+    assert result.success
+    assert isinstance(result.data, ListContents)
+    assert result.data.id == list_id
+    assert result.data.name == "רשימת קניות"
+    assert len(result.data.items) == 2
+    assert result.data.is_default  # First list is default
+
+
+def test_show_list_with_bought_items(list_service, item_service):
+    """Test showing list contents with bought items filter."""
+    # Create list with items
+    list_result = list_service.create_list("רשימת קניות")
+    assert list_result.success
+    list_id = list_result.data.id
+    
+    # Add items
+    item1_result = item_service.add_item(list_id, "חלב", 1)
+    assert item1_result.success
+    item1_id = item1_result.data.id
+    
+    item2_result = item_service.add_item(list_id, "לחם", 2)
+    assert item2_result.success
+    
+    # Mark first item as bought
+    mark_result = item_service.mark_bought(item1_id)
+    assert mark_result.success
+    
+    # Show list with bought items
+    result = list_service.show_list(list_id, include_bought=True)
+    assert result.success
+    assert len(result.data.items) == 2
+    
+    # Show list without bought items
+    result = list_service.show_list(list_id, include_bought=False)
+    assert result.success
+    assert len(result.data.items) == 1
+    assert result.data.items[0].name == "לחם"
+
+
+def test_show_default_list(list_service):
+    """Test showing default list when no list_id provided."""
+    # Create list
+    list_result = list_service.create_list("רשימת קניות")
+    assert list_result.success
+    
+    # Show default list
+    result = list_service.show_list()
+    assert result.success
+    assert result.data.id == list_result.data.id
+    assert result.data.is_default
+
+
+def test_show_list_errors(list_service):
+    """Test error cases for show_list."""
+    # No default list
+    result = list_service.show_list()
+    assert not result.success
+    assert "לא נמצאה רשימה ברירת מחדל" in result.error
+    assert "צור רשימה חדשה" in result.suggestions
+    
+    # Non-existent list
+    result = list_service.show_list(999)
+    assert not result.success
+    assert "רשימה לא נמצאה" in result.error
+    
+    # Deleted list
+    list_result = list_service.create_list("רשימת קניות")
+    assert list_result.success
+    list_id = list_result.data.id
+    
+    delete_result = list_service.delete_list(list_id)
+    assert delete_result.success
+    
+    result = list_service.show_list(list_id)
+    assert not result.success
+    assert "נמחקה" in result.error
+    assert len(result.suggestions) > 0
+
+
+def test_list_all_user_lists(list_service, item_service):
+    """Test listing all user lists with summaries."""
+    # Create lists with items
+    list1_result = list_service.create_list("רשימת קניות")
+    assert list1_result.success
+    list1_id = list1_result.data.id
+    
+    list2_result = list_service.create_list("רשימת סופר")
+    assert list2_result.success
+    list2_id = list2_result.data.id
+    
+    # Add items to first list
+    item1_result = item_service.add_item(list1_id, "חלב")
+    assert item1_result.success
+    item1_id = item1_result.data.id
+    
+    item2_result = item_service.add_item(list1_id, "לחם")
+    assert item2_result.success
+    
+    # Mark one item as bought
+    mark_result = item_service.mark_bought(item1_id)
+    assert mark_result.success
+    
+    # Add item to second list
+    item3_result = item_service.add_item(list2_id, "ביצים")
+    assert item3_result.success
+    
+    # List all lists
+    result = list_service.list_all_user_lists()
+    assert result.success
+    assert len(result.data) == 2
+    
+    # Verify first list summary
+    list1 = next(l for l in result.data if l.id == list1_id)
+    assert isinstance(list1, ListSummary)
+    assert list1.name == "רשימת קניות"
+    assert list1.total_items == 1  # One unbought item
+    assert list1.bought_items == 1  # One bought item
+    assert list1.is_default  # First list is default
+    
+    # Verify second list summary
+    list2 = next(l for l in result.data if l.id == list2_id)
+    assert list2.name == "רשימת סופר"
+    assert list2.total_items == 1
+    assert list2.bought_items == 0
+    assert not list2.is_default
+
+
+def test_list_all_user_lists_with_deleted(list_service):
+    """Test listing all user lists including deleted ones."""
+    # Create two lists
+    list1_result = list_service.create_list("רשימת קניות")
+    assert list1_result.success
+    
+    list2_result = list_service.create_list("רשימת סופר")
+    assert list2_result.success
+    list2_id = list2_result.data.id
+    
+    # Delete second list
+    delete_result = list_service.delete_list(list2_id)
+    assert delete_result.success
+    
+    # List active lists only
+    result = list_service.list_all_user_lists()
+    assert result.success
+    assert len(result.data) == 1
+    
+    # List all lists including deleted
+    result = list_service.list_all_user_lists(include_deleted=True)
+    assert result.success
+    assert len(result.data) == 2
+
+
+def test_list_all_user_lists_empty(list_service):
+    """Test listing lists when user has none."""
+    result = list_service.list_all_user_lists()
+    assert not result.success
+    assert "לא נמצאו רשימות" in result.error
+    assert "צור רשימה חדשה" in result.suggestions
+
+
+def test_is_list_soft_deleted(list_service):
+    """Test checking if a list is soft-deleted."""
+    # Create list
+    list_result = list_service.create_list("רשימת קניות")
+    assert list_result.success
+    list_id = list_result.data.id
+    
+    # Check active list
+    result = list_service.is_list_soft_deleted(list_id)
+    assert result.success
+    assert not result.data
+    
+    # Delete list
+    delete_result = list_service.delete_list(list_id)
+    assert delete_result.success
+    
+    # Check deleted list
+    result = list_service.is_list_soft_deleted(list_id)
+    assert result.success
+    assert result.data
+
+
+def test_is_list_soft_deleted_errors(list_service):
+    """Test error cases for is_list_soft_deleted."""
+    # Non-existent list
+    result = list_service.is_list_soft_deleted(999)
+    assert not result.success
+    assert "רשימה לא נמצאה" in result.error 

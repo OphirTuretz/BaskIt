@@ -1,15 +1,35 @@
 """List management service."""
-from typing import Optional, List, TypeVar, cast
+from typing import Optional, List, TypeVar, cast, Dict, Sequence
+from dataclasses import dataclass
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 
-from baskit.models import GroceryList, User
+from baskit.models import GroceryList, User, GroceryItem
 from baskit.domain.types import HebrewText
 from .base_service import BaseService, Result
 
 
 # Generic type for service results
 T = TypeVar('T')
+
+
+@dataclass
+class ListSummary:
+    """Summary of a grocery list."""
+    id: int
+    name: str
+    total_items: int
+    bought_items: int
+    is_default: bool
+
+
+@dataclass
+class ListContents:
+    """Contents of a grocery list."""
+    id: int
+    name: str
+    items: List[GroceryItem]
+    is_default: bool
 
 
 class ListService(BaseService):
@@ -403,3 +423,170 @@ class ListService(BaseService):
         except Exception as e:
             self.logger.exception("Failed to get lists")
             return Result.fail("שגיאה בקבלת רשימות") 
+
+    def show_list(
+        self,
+        list_id: Optional[int] = None,
+        include_bought: bool = True
+    ) -> Result[ListContents]:
+        """
+        Show contents of a list. If no list_id provided, shows default list.
+        
+        Args:
+            list_id: ID of list to show (optional)
+            include_bought: Whether to include bought items (default: True)
+            
+        Returns:
+            Result containing list contents or error
+        """
+        try:
+            with self.transaction.transaction() as session:
+                # Get list (default or specified)
+                if list_id is None:
+                    user = session.get(User, self.user_id)
+                    if not user or not user.default_list_id:
+                        return Result.fail(
+                            "לא נמצאה רשימה ברירת מחדל",
+                            suggestions=["צור רשימה חדשה"]
+                        )
+                    list_id = user.default_list_id
+                
+                list_ = session.get(GroceryList, list_id)
+                if not list_:
+                    return Result.fail("רשימה לא נמצאה")
+                
+                if list_.owner_id != self.user_id:
+                    return Result.fail("אין הרשאה לצפות ברשימה זו")
+                
+                if list_.is_deleted:
+                    return Result.fail(
+                        "רשימה זו נמחקה",
+                        suggestions=["שחזר את הרשימה", "בחר רשימה אחרת"]
+                    )
+                
+                # Get items
+                query = select(GroceryItem).where(GroceryItem.list_id == list_id)
+                if not include_bought:
+                    query = query.where(GroceryItem.is_bought == False)
+                items = list(session.execute(query).scalars().all())  # Convert to list
+                
+                # Check if default
+                user = session.get(User, self.user_id)
+                is_default = bool(user and user.default_list_id == list_id)  # Convert to bool
+                
+                contents = ListContents(
+                    id=list_.id,
+                    name=list_.name,
+                    items=items,
+                    is_default=is_default
+                )
+                
+                self._log_action(
+                    "show_list",
+                    list_id=list_id,
+                    item_count=len(items)
+                )
+                return Result.ok(contents)
+                
+        except Exception as e:
+            self.logger.exception("Failed to show list")
+            return Result.fail("שגיאה בהצגת הרשימה")
+
+    def list_all_user_lists(
+        self,
+        include_deleted: bool = False
+    ) -> Result[List[ListSummary]]:
+        """
+        Get all lists belonging to the user.
+        
+        Args:
+            include_deleted: Whether to include soft-deleted lists (default: False)
+            
+        Returns:
+            Result containing list of summaries or error
+        """
+        try:
+            with self.transaction.transaction() as session:
+                # Get user's default list ID
+                user = session.get(User, self.user_id)
+                default_list_id = user.default_list_id if user else None
+                
+                # Query for lists with item counts
+                query = (
+                    select(
+                        GroceryList,
+                        func.count(GroceryItem.id)
+                        .filter(GroceryItem.is_bought == False)
+                        .label("total_items"),
+                        func.count(GroceryItem.id)
+                        .filter(GroceryItem.is_bought == True)
+                        .label("bought_items")
+                    )
+                    .outerjoin(GroceryItem)
+                    .where(GroceryList.owner_id == self.user_id)
+                    .group_by(GroceryList.id)
+                )
+                
+                if not include_deleted:
+                    query = query.where(GroceryList.is_deleted == False)
+                
+                results = session.execute(query).all()
+                
+                # Convert to summaries
+                summaries = [
+                    ListSummary(
+                        id=list_.id,
+                        name=list_.name,
+                        total_items=total_items,
+                        bought_items=bought_items,
+                        is_default=list_.id == default_list_id
+                    )
+                    for list_, total_items, bought_items in results
+                ]
+                
+                if not summaries:
+                    return Result.fail(
+                        "לא נמצאו רשימות",
+                        suggestions=["צור רשימה חדשה"]
+                    )
+                
+                self._log_action(
+                    "list_lists",
+                    list_count=len(summaries),
+                    include_deleted=include_deleted
+                )
+                return Result.ok(summaries)
+                
+        except Exception as e:
+            self.logger.exception("Failed to list user lists")
+            return Result.fail("שגיאה בהצגת הרשימות")
+
+    def is_list_soft_deleted(self, list_id: int) -> Result[bool]:
+        """
+        Check if a list is soft-deleted.
+        
+        Args:
+            list_id: ID of list to check
+            
+        Returns:
+            Result containing deletion status or error
+        """
+        try:
+            with self.transaction.transaction() as session:
+                list_ = session.get(GroceryList, list_id)
+                if not list_:
+                    return Result.fail("רשימה לא נמצאה")
+                
+                if list_.owner_id != self.user_id:
+                    return Result.fail("אין הרשאה לבדוק רשימה זו")
+                
+                self._log_action(
+                    "check_list_deleted",
+                    list_id=list_id,
+                    is_deleted=list_.is_deleted
+                )
+                return Result.ok(list_.is_deleted)
+                
+        except Exception as e:
+            self.logger.exception("Failed to check list deletion status")
+            return Result.fail("שגיאה בבדיקת סטטוס הרשימה") 

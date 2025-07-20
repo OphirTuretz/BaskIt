@@ -16,6 +16,7 @@ class Result(BaseModel, Generic[T]):
     success: bool
     data: Optional[T] = None
     error: str = ""
+    message: str = ""
     suggestions: List[str] = []
     metadata: dict = {}
 
@@ -23,9 +24,9 @@ class Result(BaseModel, Generic[T]):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @classmethod
-    def ok(cls, data: T, **metadata) -> 'Result[T]':
+    def ok(cls, data: T, message: str = "", **metadata) -> 'Result[T]':
         """Create a successful result."""
-        return cls(success=True, data=data, metadata=metadata)
+        return cls(success=True, data=data, message=message, metadata=metadata)
 
     @classmethod
     def fail(cls, error: str, suggestions: Optional[List[str]] = None) -> 'Result[T]':
