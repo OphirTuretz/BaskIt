@@ -38,21 +38,41 @@ def render_list_display(
     unbought_items = [i for i in list_contents.items if not i.is_bought]
     bought_items = [i for i in list_contents.items if i.is_bought]
     
+    # Add custom CSS for button styling - only for list item buttons
+    st.markdown("""
+        <style>
+        /* Target only the list item action buttons by their keys */
+        .stButton > button[kind="secondary"][data-testid*="inc_"],
+        .stButton > button[kind="secondary"][data-testid*="dec_"],
+        .stButton > button[kind="secondary"][data-testid*="buy_"],
+        .stButton > button[kind="secondary"][data-testid*="del_"],
+        .stButton > button[kind="secondary"][data-testid*="unbuy_"] {
+            width: 40px !important;
+            height: 40px !important;
+            padding: 0px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
     # Display unbought items first
     if unbought_items:
         st.subheader("פריטים לקנייה")
         for item in unbought_items:
             with st.container():
-                # Use a single row of columns for the item
-                name_col, inc_col, buy_col, dec_col, del_col = st.columns([3, 1, 1, 1, 1])
+                # Use a single row of columns for the item, reordered buttons
+                name_col, inc_col, dec_col, buy_col, del_col = st.columns([3, 1, 1, 1, 1])
                 
                 with name_col:
                     st.write(f"{item.name} ({item.quantity} {item.unit})")
                 
                 with inc_col:
                     if st.button(
-                        "➕ הוסף כמות",
-                        key=f"inc_{item.id}"
+                        "➕",
+                        key=f"inc_{item.id}",
+                        help="הוסף כמות"
                     ):
                         result = item_service.increment_quantity(item.id)
                         if result.success:
@@ -60,21 +80,11 @@ def render_list_display(
                         else:
                             render_feedback(result.error, type_="error")
                 
-                with buy_col:
-                    if st.button(
-                        "✅ סמן כנקנה",
-                        key=f"buy_{item.id}"
-                    ):
-                        result = item_service.mark_bought(item.id)
-                        if result.success:
-                            st.rerun()
-                        else:
-                            render_feedback(result.error, type_="error")
-                
                 with dec_col:
                     if st.button(
-                        "➖ הפחת כמות",
-                        key=f"dec_{item.id}"
+                        "➖",
+                        key=f"dec_{item.id}",
+                        help="הפחת כמות"
                     ):
                         result = item_service.increment_quantity(
                             item.id,
@@ -90,10 +100,23 @@ def render_list_display(
                         else:
                             render_feedback(result.error, type_="error")
                 
+                with buy_col:
+                    if st.button(
+                        "✅",
+                        key=f"buy_{item.id}",
+                        help="סמן כנקנה"
+                    ):
+                        result = item_service.mark_bought(item.id)
+                        if result.success:
+                            st.rerun()
+                        else:
+                            render_feedback(result.error, type_="error")
+                
                 with del_col:
                     if st.button(
-                        "❌ מחק פריט",
-                        key=f"del_{item.id}"
+                        "❌",
+                        key=f"del_{item.id}",
+                        help="מחק פריט"
                     ):
                         result = item_service.remove_item(item.id)
                         if result.success:
@@ -110,8 +133,9 @@ def render_list_display(
                     st.write(f"{item.name} ({item.quantity} {item.unit})")
                 with action_col:
                     if st.button(
-                        "⬜ סמן כלא נקנה",
-                        key=f"unbuy_{item.id}"
+                        "⬜",
+                        key=f"unbuy_{item.id}",
+                        help="סמן כלא נקנה"
                     ):
                         result = item_service.mark_bought(
                             item.id,
