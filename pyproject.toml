@@ -1,36 +1,64 @@
 [build-system]
-requires = ["setuptools>=45", "wheel"]
+requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "baskit"
 version = "0.1.0"
+authors = [
+    { name="Ophir Turetz", email="ophir.turetz@gmail.com" },
+]
 description = "AI-powered grocery shopping assistant with Hebrew support"
 readme = "README.md"
 requires-python = ">=3.8"
-license = { text = "MIT" }
-authors = [
-    { name = "BaskIt Team" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Development Status :: 3 - Alpha",
+    "Natural Language :: Hebrew",
 ]
+
 dependencies = [
-    "streamlit>=1.32.2",
-    "python-dotenv>=1.0.1",
+    "SQLAlchemy>=2.0.0",
+    "alembic>=1.13.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "python-dotenv>=1.0.0",
     "loguru>=0.7.2",
+    "streamlit>=1.32.0",
+    "openai>=1.97.0",
+    "tenacity>=8.5.0",
 ]
 
 [project.optional-dependencies]
 test = [
-    "pytest>=8.1.1",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=1.1.0",
+    "factory-boy>=3.3.0",
 ]
 dev = [
-    "pytest>=8.1.1",
+    "mypy>=1.8.0",
+    "sqlalchemy[mypy]>=2.0.0",
 ]
 
 [tool.pytest.ini_options]
+addopts = "-v"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "-v --tb=short"
+markers = [
+    "asyncio: mark test as async/await test",
+]
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-packages = ["baskit"] 
+[tool.mypy]
+plugins = ["sqlalchemy.ext.mypy.plugin"]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["streamlit.*"]
+ignore_missing_imports = true 

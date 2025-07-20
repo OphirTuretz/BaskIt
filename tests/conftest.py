@@ -1,5 +1,6 @@
 """Test configuration and fixtures for BaskIt."""
 import pytest
+from unittest.mock import Mock, AsyncMock
 from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.engine import Engine
@@ -8,6 +9,9 @@ import sqlite3
 from baskit.models import Base, User, GroceryList, GroceryItem
 from baskit.services.list_service import ListService
 from baskit.services.item_service import ItemService
+from baskit.ai.call_gpt import GPTConfig, GPTContext, GPTHandler
+from baskit.ai.handlers import ToolExecutor
+from baskit.ai.tool_service import ToolService
 
 
 @pytest.fixture(scope="session")
@@ -118,3 +122,150 @@ def grocery_item(session, grocery_list) -> GroceryItem:
     session.commit()
     session.refresh(item)
     return item 
+
+@pytest.fixture
+def mock_openai():
+    """Create a mock OpenAI client."""
+    mock = Mock()
+    mock.chat.completions.create = AsyncMock()
+    return mock
+
+@pytest.fixture
+def mock_gpt_config():
+    """Create a test GPT configuration for mock mode."""
+    return GPTConfig(
+        model="mock",
+        temperature=0.0,  # Not used in mock mode
+        max_retries=1,    # Not used in mock mode
+        timeout=1         # Not used in mock mode
+    )
+
+@pytest.fixture
+def api_gpt_config():
+    """Create a test GPT configuration for API mode."""
+    return GPTConfig(
+        model="gpt-4",
+        temperature=0.0,  # Use zero temperature for deterministic results
+        max_retries=3,
+        timeout=10
+    )
+
+@pytest.fixture
+def gpt_context():
+    """Create a test GPT context."""
+    return GPTContext(
+        messages=[{
+            'role': 'system',
+            'content': 'אתה עוזר קניות בעברית.'
+        }],
+        current_list=None,
+        last_item=None
+    )
+
+@pytest.fixture
+def gpt_handler(mock_openai, mock_gpt_config):
+    """Create a test GPT handler in mock mode by default."""
+    handler = GPTHandler(mock_gpt_config)
+    handler.client = mock_openai
+    handler.use_mock = True  # Default to mock mode for safety
+    return handler
+
+@pytest.fixture
+def api_gpt_handler(mock_openai, api_gpt_config):
+    """Create a test GPT handler in API mode."""
+    handler = GPTHandler(api_gpt_config)
+    handler.client = mock_openai
+    handler.use_mock = False  # Explicitly use API mode
+    return handler
+
+@pytest.fixture
+def tool_executor(mock_item_service, mock_list_service):
+    """Create a test tool executor."""
+    return ToolExecutor(
+        item_service=mock_item_service,
+        list_service=mock_list_service
+    )
+
+@pytest.fixture
+def mock_item_service():
+    """Create a mock item service."""
+    mock = Mock()
+    mock.add_item = AsyncMock(return_value=Mock(success=True, data={'item': {
+        'id': 1,
+        'name': 'חלב',
+        'quantity': 1,
+        'unit': 'יחידה',
+        'is_bought': False
+    }}))
+    mock.update_item = AsyncMock(return_value=Mock(success=True))
+    mock.mark_bought = AsyncMock(return_value=Mock(success=True))
+    mock.get_item_locations = AsyncMock(return_value=Mock(success=True))
+    return mock
+
+@pytest.fixture
+def mock_list_service():
+    """Create a mock list service."""
+    mock = Mock()
+    mock.create_list = AsyncMock(return_value=Mock(success=True))
+    mock.delete_list = AsyncMock(return_value=Mock(success=True))
+    mock.show_list = AsyncMock(return_value=Mock(success=True, data={
+        'list': {
+            'id': 1,
+            'name': 'רשימת קניות',
+            'items': [{
+                'id': 1,
+                'name': 'חלב',
+                'quantity': 1,
+                'unit': 'יחידה',
+                'is_bought': False
+            }]
+        }
+    }))
+    mock.get_lists = AsyncMock(return_value=Mock(success=True, data=[{
+        'id': 1,
+        'name': 'רשימת קניות'
+    }]))
+    return mock
+
+@pytest.fixture
+def tool_service(session, user):
+    """Create a tool service instance."""
+    return ToolService(session, user.id)
+
+@pytest.fixture
+def hebrew_inputs():
+    """Create test Hebrew inputs and expected outputs."""
+    return [
+        (
+            'תוסיף חלב',
+            {
+                'name': 'add_item',
+                'arguments': {
+                    'name': 'חלב',
+                    'quantity': 1,
+                    'unit': 'יחידה'
+                }
+            }
+        ),
+        (
+            'תוריד 2 ביצים',
+            {
+                'name': 'update_quantity',
+                'arguments': {
+                    'name': 'ביצים',
+                    'quantity': 2,
+                    'operation': 'reduce'
+                }
+            }
+        ),
+        (
+            'סמן שקניתי חלב',
+            {
+                'name': 'mark_bought',
+                'arguments': {
+                    'name': 'חלב',
+                    'is_bought': True
+                }
+            }
+        )
+    ] 

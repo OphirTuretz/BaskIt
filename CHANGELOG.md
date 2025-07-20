@@ -8,28 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Initial project setup
-- Basic AI-powered item recognition
-- Hebrew language support
-- SQLite database integration
-- Streamlit web interface
-- Logging system
-- Test infrastructure
+- OpenAI GPT integration for natural language understanding
+- Tool-based architecture for handling user commands
+- Comprehensive error handling with Hebrew messages
+- Retry logic for API calls
+- Context management for conversation history
+- Unit and integration tests for GPT functionality
+- Support for async operations with pytest-asyncio
 
 ### Changed
-- N/A
-
-### Deprecated
-- N/A
-
-### Removed
-- N/A
+- Updated project dependencies
+- Enhanced error messages with Hebrew support
+- Improved test coverage
 
 ### Fixed
-- N/A
+- Error handling in list management
+- Hebrew text validation
+- API error handling with proper messages
 
-### Security
-- N/A
+## [0.1.0] - 2024-03-20
 
-## [0.1.0] - 2024-03-XX
-- Initial development release 
+### Added
+- Initial release
+- Basic list management functionality
+- SQLite database integration
+- Hebrew text support
+- Streamlit web interface 
