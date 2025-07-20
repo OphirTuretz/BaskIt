@@ -1,3 +1,7 @@
 streamlit==1.32.2
-google-cloud-vision==3.5.4
+# streamlit-audiorec==0.1.5
+# audio-recorder-streamlit==0.1.2
+# google-cloud-vision==3.5.4
 pillow==10.3.0 
+transformers==4.40.2
+torch 
