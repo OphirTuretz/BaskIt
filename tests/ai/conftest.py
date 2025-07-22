@@ -55,42 +55,78 @@ def mock_item_service():
     """Mock item service."""
     mock = Mock(spec=ItemService)
     
-    # Setup default behaviors
-    mock.add_item.return_value = Result.ok(
-        GroceryItem(
-            id=1,
-            name="חלב",
-            quantity=1,
-            unit="יחידה",
-            list_id=1
-        )
+    # Add required attributes for ToolService
+    mock.session = Mock()
+    mock.user_id = 1
+    
+    # Create a default item
+    default_item = GroceryItem(
+        id=1,
+        name="חלב",
+        quantity=1,
+        unit="יחידה",
+        list_id=1,
+        is_bought=False
     )
     
-    mock.remove_item.return_value = Result.ok(None)
+    # Create a default list
+    default_list = GroceryList(
+        id=1,
+        name="רשימה ראשית",
+        owner_id=1,
+        items=[default_item]
+    )
     
-    mock.update_item.return_value = Result.ok(
-        GroceryItem(
+    # Setup default behaviors with proper data structures
+    mock.add_item.return_value = Result(
+        success=True,
+        data=default_item,
+        error="",
+        suggestions=[]
+    )
+    
+    mock.remove_item.return_value = Result(
+        success=True,
+        data=None,
+        error="",
+        suggestions=[]
+    )
+    
+    mock.update_item.return_value = Result(
+        success=True,
+        data=GroceryItem(
             id=1,
             name="חלב",
             quantity=2,
             unit="יחידה",
-            list_id=1
-        )
+            list_id=1,
+            is_bought=False
+        ),
+        error="",
+        suggestions=[]
     )
     
-    mock.mark_bought.return_value = Result.ok(
-        GroceryItem(
+    mock.mark_bought.return_value = Result(
+        success=True,
+        data=GroceryItem(
             id=1,
             name="חלב",
             quantity=1,
             unit="יחידה",
             list_id=1,
             is_bought=True
-        )
+        ),
+        error="",
+        suggestions=[]
     )
     
-    # Setup get_item_locations
-    mock.get_item_locations.return_value = Result.ok([])
+    # Setup get_item_locations with proper data structure
+    mock.get_item_locations.return_value = Result(
+        success=True,
+        data=[(default_item, default_list)],
+        error="",
+        suggestions=[]
+    )
     
     return mock
 
@@ -100,36 +136,44 @@ def mock_list_service():
     """Mock list service."""
     mock = Mock(spec=ListService)
     
-    # Setup default behaviors
-    mock.get_lists.return_value = Result.ok([
-        GroceryList(
-            id=1,
-            name="רשימה ראשית",
-            owner_id=1,
-            items=[]
-        )
-    ])
-    
-    mock.get_default_list.return_value = Result.ok(
-        GroceryList(
-            id=1,
-            name="רשימה ראשית",
-            owner_id=1,
-            items=[]
-        )
+    # Create a default list
+    default_list = GroceryList(
+        id=1,
+        name="רשימה ראשית",
+        owner_id=1,
+        items=[]
     )
     
-    mock.create_list.return_value = Result.ok(
-        GroceryList(
+    # Setup default behaviors with proper data structures
+    mock.get_lists.return_value = Result(
+        success=True,
+        data=[default_list],
+        error="",
+        suggestions=[]
+    )
+    
+    mock.get_default_list.return_value = Result(
+        success=True,
+        data=default_list,
+        error="",
+        suggestions=[]
+    )
+    
+    mock.create_list.return_value = Result(
+        success=True,
+        data=GroceryList(
             id=2,
             name="רשימה חדשה",
             owner_id=1,
             items=[]
-        )
+        ),
+        error="",
+        suggestions=[]
     )
     
-    mock.show_list.return_value = Result.ok(
-        GroceryList(
+    mock.show_list.return_value = Result(
+        success=True,
+        data=GroceryList(
             id=1,
             name="רשימה ראשית",
             owner_id=1,
@@ -143,7 +187,40 @@ def mock_list_service():
                     is_bought=False
                 )
             ]
-        )
+        ),
+        error="",
+        suggestions=[]
+    )
+    
+    return mock
+
+
+@pytest.fixture
+def mock_tool_service():
+    """Mock tool service."""
+    mock = Mock()
+    
+    # Create a default list
+    default_list = GroceryList(
+        id=1,
+        name="רשימה ראשית",
+        owner_id=1,
+        items=[]
+    )
+    
+    # Setup default behaviors with proper data structures
+    mock.resolve_list.return_value = Result(
+        success=True,
+        data=default_list.id,
+        error="",
+        suggestions=[]
+    )
+    
+    mock.resolve_item.return_value = Result(
+        success=True,
+        data=(1, default_list),
+        error="",
+        suggestions=[]
     )
     
     return mock
@@ -168,7 +245,7 @@ def gpt_handler(mock_openai, gpt_config):
                     (),
                     {
                         'name': 'add_item',
-                        'arguments': '{"name": "חלב", "quantity": 1, "unit": "יחידה"}'
+                        'arguments': '{"item_name": "חלב", "quantity": 1, "unit": "יחידה"}'
                     }
                 )
             }
@@ -206,12 +283,13 @@ def gpt_handler(mock_openai, gpt_config):
 
 
 @pytest.fixture
-def tool_executor(mock_item_service, mock_list_service):
+def tool_executor(mock_item_service, mock_list_service, mock_tool_service):
     """Tool executor for testing."""
     executor = ToolExecutor(
         item_service=mock_item_service,
         list_service=mock_list_service
     )
+    executor.tool_service = mock_tool_service  # Override the tool service
     executor.allow_duplicates = True  # Allow duplicates for testing
     return executor
 
@@ -225,7 +303,7 @@ def hebrew_inputs():
             {
                 'name': 'add_item',
                 'arguments': {
-                    'name': 'חלב',
+                    'item_name': 'חלב',
                     'quantity': 1,
                     'unit': 'יחידה'
                 }
@@ -236,7 +314,7 @@ def hebrew_inputs():
             {
                 'name': 'update_quantity',
                 'arguments': {
-                    'name': 'ביצים',
+                    'item_name': 'ביצים',
                     'quantity': 2,
                     'unit': 'יחידה'
                 }
@@ -247,7 +325,7 @@ def hebrew_inputs():
             {
                 'name': 'mark_bought',
                 'arguments': {
-                    'name': 'חלב',
+                    'item_name': 'חלב',
                     'is_bought': True
                 }
             }

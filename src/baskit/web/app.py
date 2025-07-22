@@ -69,7 +69,8 @@ async def process_smart_input(
     current_list: Optional[str],
     gpt_handler: GPTHandler,
     item_service: ItemService,
-    list_service: ListService
+    list_service: ListService,
+    tool_executor: Optional[ToolExecutor] = None
 ) -> ToolExecutionResult:
     """Process smart mode input and handle results.
     
@@ -79,6 +80,7 @@ async def process_smart_input(
         gpt_handler: GPT handler instance
         item_service: Service for managing items
         list_service: Service for managing lists
+        tool_executor: Optional tool executor instance (for testing)
         
     Returns:
         ToolExecutionResult: The result of processing the input
@@ -161,11 +163,12 @@ async def process_smart_input(
                         st.write(f"• {suggestion}")
             return gpt_result
             
-        # Create tool executor
-        tool_executor = ToolExecutor(
-            item_service=item_service,
-            list_service=list_service
-        )
+        # Create tool executor if not provided
+        if tool_executor is None:
+            tool_executor = ToolExecutor(
+                item_service=item_service,
+                list_service=list_service
+            )
         
         # Execute each tool call
         results = []
@@ -228,7 +231,7 @@ async def process_smart_input(
         # Return success if all tools executed successfully
         final_result = ToolExecutionResult(
             success=True,
-            message="הפעולה הושלמה בהצלחה",
+            message=gpt_result.message,  # Use GPT's message instead of generic one
             data={'results': results}
         )
         
