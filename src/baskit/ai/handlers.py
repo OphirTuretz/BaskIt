@@ -14,6 +14,7 @@ from .errors import (
     AmbiguousInputError,
     ToolExecutionResult
 )
+from .tool_service import ToolService
 
 
 T = TypeVar('T')
@@ -30,6 +31,7 @@ class ToolExecutor:
         """Initialize the executor."""
         self.item_service = item_service
         self.list_service = list_service
+        self.tool_service = ToolService(item_service.session, item_service.user_id)
         self.logger = get_logger(self.__class__.__name__)
         
         # Load settings
@@ -127,38 +129,16 @@ class ToolExecutor:
         try:
             # Get list (default or specified)
             list_name = arguments.get('list_name')
-            if list_name:
-                # Since get_list_by_name doesn't exist, use get_lists and filter
-                lists_result = self.list_service.get_lists()
-                if not lists_result.success or not lists_result.data:
-                    return ToolExecutionResult.from_error(ToolExecutionError(
-                        "רשימה לא נמצאה",
-                        suggestions=["בדוק את שם הרשימה", "צור רשימה חדשה"]
-                    ))
-                
-                matching_list = next(
-                    (l for l in lists_result.data if l.name == list_name),
-                    None
-                )
-                
-                if not matching_list:
-                    return ToolExecutionResult.from_error(ToolExecutionError(
-                        f"רשימה בשם '{list_name}' לא נמצאה",
-                        suggestions=["בדוק את שם הרשימה", "צור רשימה חדשה"]
-                    ))
-                
-                list_id = matching_list.id
-            else:
-                default_result = self.list_service.get_default_list()
-                if not default_result.success or not default_result.data:
-                    return ToolExecutionResult.from_error(ToolExecutionError(
-                        "לא נמצאה רשימת ברירת מחדל",
-                        suggestions=["צור רשימה חדשה"]
-                    ))
-                list_id = default_result.data.id
+            list_result = self.tool_service.resolve_list(list_name)
+            if not list_result.success:
+                return ToolExecutionResult.from_error(ToolExecutionError(
+                    list_result.error,
+                    suggestions=list_result.suggestions
+                ))
+            list_id = list_result.data
             
-            # Add item
-            name = HebrewText(arguments['name'])
+            # Parse item details
+            name = HebrewText(arguments['item_name'])
             quantity = Quantity(
                 value=arguments.get('quantity', 1),
                 unit=arguments.get('unit', 'יחידה')
@@ -166,18 +146,32 @@ class ToolExecutor:
             
             # Check for duplicates if enabled
             if not self.allow_duplicates:
-                existing = self.item_service.get_item_locations(str(name))
-                if existing.success and existing.data:
+                item_result = self.tool_service.resolve_item(str(name), list_name)
+                if item_result.success:
                     if self.auto_merge:
-                        # Update existing item instead
-                        item_loc = existing.data[0]
-                        return await self._handle_update_quantity(
-                            {
-                                'item_id': item_loc.item_id,
-                                'quantity': item_loc.quantity + quantity.value,
-                                'unit': quantity.unit
-                            },
-                            context
+                        # Update existing item
+                        item_id, location = item_result.data
+                        result = self.item_service.update_item(
+                            item_id=item_id,
+                            quantity=location.quantity + quantity.value,
+                            unit=quantity.unit
+                        )
+                        if not result.success:
+                            return ToolExecutionResult.from_error(ToolExecutionError(
+                                result.error or "שגיאה בעדכון פריט",
+                                suggestions=result.suggestions
+                            ))
+                        return ToolExecutionResult(
+                            success=True,
+                            message=f"עדכנתי את הכמות של {name}",
+                            data={
+                                'item': {
+                                    'id': result.data.id,
+                                    'name': result.data.name,
+                                    'quantity': result.data.quantity,
+                                    'unit': result.data.unit
+                                }
+                            }
                         )
                     else:
                         return ToolExecutionResult.from_error(ToolExecutionError(
@@ -188,6 +182,7 @@ class ToolExecutor:
                             ]
                         ))
             
+            # Add new item
             result = self.item_service.add_item(
                 list_id=list_id,
                 name=str(name),
@@ -195,7 +190,7 @@ class ToolExecutor:
                 unit=quantity.unit
             )
             
-            if not result.success or not result.data:
+            if not result.success:
                 return ToolExecutionResult.from_error(ToolExecutionError(
                     result.error or "שגיאה בהוספת פריט",
                     suggestions=result.suggestions
@@ -203,6 +198,7 @@ class ToolExecutor:
             
             return ToolExecutionResult(
                 success=True,
+                message=f"הוספתי {quantity.value} {name} לרשימה",
                 data={
                     'item': {
                         'id': result.data.id,
@@ -224,8 +220,20 @@ class ToolExecutor:
     ) -> ToolExecutionResult:
         """Handle remove_item tool."""
         try:
-            item_id = arguments['item_id']
+            # Parse item details
+            name = HebrewText(arguments['item_name'])
+            list_name = arguments.get('list_name')
             
+            # Resolve item name to ID
+            item_result = self.tool_service.resolve_item(str(name), list_name)
+            if not item_result.success:
+                return ToolExecutionResult.from_error(ToolExecutionError(
+                    item_result.error,
+                    suggestions=item_result.suggestions
+                ))
+            
+            # Remove or mark as bought
+            item_id, location = item_result.data
             if self.soft_delete:
                 # Mark as bought instead of removing
                 result = self.item_service.mark_bought(
@@ -241,9 +249,17 @@ class ToolExecutor:
                     suggestions=result.suggestions
                 ))
             
+            action = "סימנתי כנקנה" if self.soft_delete else "מחקתי"
             return ToolExecutionResult(
                 success=True,
-                data={'item_id': item_id}
+                message=f"{action} את {name}",
+                data={
+                    'item': {
+                        'id': item_id,
+                        'name': str(name),
+                        'is_bought': self.soft_delete
+                    }
+                }
             )
             
         except Exception as e:
@@ -257,17 +273,29 @@ class ToolExecutor:
     ) -> ToolExecutionResult:
         """Handle update_quantity tool."""
         try:
-            item_id = arguments['item_id']
+            # Parse item details
+            name = HebrewText(arguments['item_name'])
             quantity = arguments.get('quantity')
             unit = arguments.get('unit')
+            list_name = arguments.get('list_name')
             
+            # Resolve item name to ID
+            item_result = self.tool_service.resolve_item(str(name), list_name)
+            if not item_result.success:
+                return ToolExecutionResult.from_error(ToolExecutionError(
+                    item_result.error,
+                    suggestions=item_result.suggestions
+                ))
+            
+            # Update the item
+            item_id, location = item_result.data
             result = self.item_service.update_item(
                 item_id=item_id,
                 quantity=quantity,
                 unit=unit
             )
             
-            if not result.success or not result.data:
+            if not result.success:
                 return ToolExecutionResult.from_error(ToolExecutionError(
                     result.error or "שגיאה בעדכון כמות",
                     suggestions=result.suggestions
@@ -275,9 +303,11 @@ class ToolExecutor:
             
             return ToolExecutionResult(
                 success=True,
+                message=f"עדכנתי את הכמות של {name} ל-{quantity}",
                 data={
                     'item': {
                         'id': result.data.id,
+                        'name': result.data.name,
                         'quantity': result.data.quantity,
                         'unit': result.data.unit
                     }
@@ -295,25 +325,44 @@ class ToolExecutor:
     ) -> ToolExecutionResult:
         """Handle mark_bought tool."""
         try:
-            item_id = arguments['item_id']
+            # Parse item details
+            name = HebrewText(arguments['item_name'])
+            list_name = arguments.get('list_name')
             is_bought = arguments.get('is_bought', True)
             
+            # Resolve item name to ID
+            item_result = self.tool_service.resolve_item(
+                str(name),
+                list_name,
+                include_bought=True
+            )
+            if not item_result.success:
+                return ToolExecutionResult.from_error(ToolExecutionError(
+                    item_result.error,
+                    suggestions=item_result.suggestions
+                ))
+            
+            # Mark as bought
+            item_id, location = item_result.data
             result = self.item_service.mark_bought(
                 item_id=item_id,
                 is_bought=is_bought
             )
             
-            if not result.success or not result.data:
+            if not result.success:
                 return ToolExecutionResult.from_error(ToolExecutionError(
                     result.error or "שגיאה בסימון פריט",
                     suggestions=result.suggestions
                 ))
             
+            status = "נקנה" if is_bought else "לא נקנה"
             return ToolExecutionResult(
                 success=True,
+                message=f"סימנתי את {name} כ{status}",
                 data={
                     'item': {
                         'id': result.data.id,
+                        'name': result.data.name,
                         'is_bought': result.data.is_bought
                     }
                 }

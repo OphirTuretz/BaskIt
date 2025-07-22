@@ -18,6 +18,7 @@ from baskit.ai.models import GPTContext
 from baskit.utils.logger import get_logger
 from baskit.domain.types import HebrewText
 from baskit.ai.errors import ToolExecutionResult
+from baskit.ai.handlers import ToolExecutor
 
 # Initialize logger
 logger = get_logger(__name__)
@@ -66,7 +67,9 @@ def render_mode_selector() -> str:
 async def process_smart_input(
     user_input: str,
     current_list: Optional[str],
-    gpt_handler: GPTHandler
+    gpt_handler: GPTHandler,
+    item_service: ItemService,
+    list_service: ListService
 ) -> ToolExecutionResult:
     """Process smart mode input and handle results.
     
@@ -74,6 +77,8 @@ async def process_smart_input(
         user_input: User's text input
         current_list: Current list name or None
         gpt_handler: GPT handler instance
+        item_service: Service for managing items
+        list_service: Service for managing lists
         
     Returns:
         ToolExecutionResult: The result of processing the input
@@ -86,7 +91,8 @@ async def process_smart_input(
             'correlation_id': correlation_id,
             'session_id': st.session_state.session_id,
             'list_name': current_list,
-            'input_length': len(user_input)
+            'input_length': len(user_input),
+            'input': user_input  # Log the actual input for debugging
         }
     )
     
@@ -125,28 +131,117 @@ async def process_smart_input(
             last_item=None
         )
         
-        result = await gpt_handler.call_with_tools(user_input, context)
+        # Get tool calls from GPT
+        gpt_result = await gpt_handler.call_with_tools(user_input, context)
         
         logger.info(
-            "Smart input processed",
+            "GPT response received",
             extra={
                 'correlation_id': correlation_id,
                 'session_id': st.session_state.session_id,
-                'success': result.success,
-                'has_suggestions': bool(result.suggestions)
+                'success': gpt_result.success,
+                'has_tool_calls': bool(gpt_result.data and gpt_result.data.get('tool_calls')),
+                'tool_calls_count': len(gpt_result.data.get('tool_calls', [])) if gpt_result.data else 0
             }
         )
         
-        if result.success:
-            st.success(result.message)
-        else:
-            st.error(result.message)
-            if result.suggestions:
+        if not gpt_result.success:
+            logger.warning(
+                "GPT call failed",
+                extra={
+                    'correlation_id': correlation_id,
+                    'error': gpt_result.error,
+                    'has_suggestions': bool(gpt_result.suggestions)
+                }
+            )
+            st.error(gpt_result.error)
+            if gpt_result.suggestions:
                 with st.expander("הצעות לתיקון"):
-                    for suggestion in result.suggestions:
+                    for suggestion in gpt_result.suggestions:
                         st.write(f"• {suggestion}")
+            return gpt_result
+            
+        # Create tool executor
+        tool_executor = ToolExecutor(
+            item_service=item_service,
+            list_service=list_service
+        )
         
-        return result
+        # Execute each tool call
+        results = []
+        for tool_call in gpt_result.data['tool_calls']:
+            logger.info(
+                "Executing tool call",
+                extra={
+                    'correlation_id': correlation_id,
+                    'tool': tool_call['name'],
+                    'arguments': tool_call['arguments']
+                }
+            )
+            
+            result = await tool_executor.execute(tool_call, context)
+            results.append(result)
+            
+            # Log result
+            logger.info(
+                "Tool execution completed",
+                extra={
+                    'correlation_id': correlation_id,
+                    'tool': tool_call['name'],
+                    'success': result.success,
+                    'has_error': bool(result.error),
+                    'has_suggestions': bool(result.suggestions),
+                    'data': result.data
+                }
+            )
+            
+            # Show feedback
+            if result.success:
+                success_msg = result.message or "הפעולה הושלמה בהצלחה"
+                st.success(success_msg)
+                logger.info(
+                    "Tool execution success",
+                    extra={
+                        'correlation_id': correlation_id,
+                        'message': success_msg
+                    }
+                )
+            else:
+                st.error(result.error)
+                if result.suggestions:
+                    with st.expander("הצעות לתיקון"):
+                        for suggestion in result.suggestions:
+                            st.write(f"• {suggestion}")
+                logger.warning(
+                    "Tool execution failed",
+                    extra={
+                        'correlation_id': correlation_id,
+                        'error': result.error,
+                        'suggestions': result.suggestions
+                    }
+                )
+            
+            # Stop on first error
+            if not result.success:
+                return result
+        
+        # Return success if all tools executed successfully
+        final_result = ToolExecutionResult(
+            success=True,
+            message="הפעולה הושלמה בהצלחה",
+            data={'results': results}
+        )
+        
+        logger.info(
+            "Smart input processing completed",
+            extra={
+                'correlation_id': correlation_id,
+                'success': True,
+                'results_count': len(results)
+            }
+        )
+        
+        return final_result
                 
     except Exception as e:
         logger.exception(
@@ -154,7 +249,8 @@ async def process_smart_input(
             extra={
                 'correlation_id': correlation_id,
                 'session_id': st.session_state.session_id,
-                'error_type': type(e).__name__
+                'error_type': type(e).__name__,
+                'error': str(e)
             }
         )
         error_result = ToolExecutionResult(
@@ -212,15 +308,38 @@ async def render_smart_input(
             "Smart input submitted",
             extra={
                 'session_id': st.session_state.session_id,
-                'input_length': len(user_input)
+                'input_length': len(user_input),
+                'input': user_input
             }
         )
         with st.spinner("מעבד את הבקשה..."):
             gpt_handler = GPTHandler()
-            result = await process_smart_input(user_input, current_list, gpt_handler)
+            result = await process_smart_input(
+                user_input, 
+                current_list, 
+                gpt_handler,
+                item_service,
+                list_service
+            )
             if result.success:
+                logger.info(
+                    "Smart input processing succeeded, triggering UI refresh",
+                    extra={
+                        'session_id': st.session_state.session_id,
+                        'input': user_input
+                    }
+                )
                 st.session_state.smart_input_submitted = True  # Mark for clearing on next render
-                st.experimental_rerun()  # Rerun to clear the input
+                st.experimental_rerun()  # Rerun to refresh the list display
+            else:
+                logger.warning(
+                    "Smart input processing failed",
+                    extra={
+                        'session_id': st.session_state.session_id,
+                        'input': user_input,
+                        'error': result.error
+                    }
+                )
 
 async def main() -> None:
     """Main application entry point."""

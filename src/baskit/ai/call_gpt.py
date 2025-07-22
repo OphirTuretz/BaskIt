@@ -594,7 +594,11 @@ User Input: ""
                     
                 # Parse arguments from JSON string
                 try:
-                    arguments = json.loads(tool_call.function.arguments)
+                    # Check if arguments is already a dict
+                    if isinstance(tool_call.function.arguments, dict):
+                        arguments = tool_call.function.arguments
+                    else:
+                        arguments = json.loads(tool_call.function.arguments)
                 except json.JSONDecodeError as e:
                     self.logger.error(
                         "Failed to parse tool arguments",
@@ -602,6 +606,13 @@ User Input: ""
                         error=str(e)
                     )
                     continue
+                
+                # Add debug logging
+                self.logger.debug(
+                    "Parsed tool call",
+                    name=tool_call.function.name,
+                    arguments=arguments
+                )
                 
                 tool_calls.append(ToolCall(
                     name=tool_call.function.name,
@@ -747,7 +758,7 @@ User Input: ""
                             {
                                 'name': 'add_item',
                                 'arguments': {
-                                    'name': item_name,
+                                    'item_name': item_name,  # Changed from 'name' to 'item_name'
                                     'quantity': 1,
                                     'unit': 'יחידה'
                                 }
