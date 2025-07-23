@@ -3,6 +3,7 @@ altair==5.5.0
 annotated-types==0.7.0
 anyio==4.9.0
 attrs==25.3.0
+-e git+https://github.com/OphirTuretz/BaskIt.git@2c36a53e3444a86089eb6550329d96e055f30527#egg=baskit
 blinker==1.9.0
 cachetools==5.5.2
 certifi==2025.7.14

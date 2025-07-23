@@ -27,7 +27,7 @@ BaskIt is a modern grocery list management application that leverages OpenAI's G
 
 2. Create and activate Python virtual environment:
    ```bash
-   python -m venv venv
+   python3 -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
