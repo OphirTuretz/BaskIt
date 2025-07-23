@@ -50,7 +50,8 @@ class ToolExecutor:
             'update_quantity': self._handle_update_quantity,
             'mark_bought': self._handle_mark_bought,
             'create_list': self._handle_create_list,
-            'show_list': self._handle_show_list
+            'show_list': self._handle_show_list,
+            'reduce_quantity': self._handle_reduce_quantity
         }
         
         # Map error types to handlers
@@ -82,8 +83,8 @@ class ToolExecutor:
                 arguments=arguments
             )
             
-            # Get handler method
-            handler = getattr(self, f'_handle_{tool_name}', None)
+            # Get handler method from the handlers dictionary
+            handler = self.handlers.get(tool_name)
             if not handler:
                 self.logger.error(
                     "No handler found for tool",
@@ -114,8 +115,15 @@ class ToolExecutor:
     ) -> ToolExecutionResult:
         """Handle add_item tool."""
         try:
-            # Get list (default or specified)
+            # Parse item details
+            name = HebrewText(arguments['item_name'])
+            quantity = Quantity(
+                value=arguments.get('quantity', 1),
+                unit=arguments.get('unit', 'יחידה')
+            )
             list_name = arguments.get('list_name')
+            
+            # Get list (default or specified)
             list_result = self.tool_service.resolve_list(list_name)
             if not list_result.success:
                 return ToolExecutionResult.from_error(ToolExecutionError(
@@ -123,13 +131,6 @@ class ToolExecutor:
                     suggestions=list_result.suggestions
                 ))
             list_id = list_result.data
-            
-            # Parse item details
-            name = HebrewText(arguments['item_name'])
-            quantity = Quantity(
-                value=arguments.get('quantity', 1),
-                unit=arguments.get('unit', 'יחידה')
-            )
             
             # Check for duplicates if enabled
             if not self.allow_duplicates:
@@ -169,7 +170,7 @@ class ToolExecutor:
                             ]
                         ))
             
-            # Add new item
+            # Add the item
             result = self.item_service.add_item(
                 list_id=list_id,
                 name=str(name),
@@ -179,21 +180,14 @@ class ToolExecutor:
             
             if not result.success:
                 return ToolExecutionResult.from_error(ToolExecutionError(
-                    result.error or "שגיאה בהוספת פריט",
+                    result.error,
                     suggestions=result.suggestions
                 ))
             
             return ToolExecutionResult(
                 success=True,
-                message=f"הוספתי {quantity.value} {name} לרשימה",
-                data={
-                    'item': {
-                        'id': result.data.id,
-                        'name': result.data.name,
-                        'quantity': result.data.quantity,
-                        'unit': result.data.unit
-                    }
-                }
+                message=f"הוספתי {quantity} {name}",
+                data={'item': result.data}
             )
             
         except Exception as e:
@@ -342,6 +336,48 @@ class ToolExecutor:
             self.logger.exception("Failed to update quantity")
             return ToolExecutionResult.from_exception(e)
 
+    async def _handle_reduce_quantity(
+        self,
+        arguments: Dict[str, Any],
+        context: GPTContext
+    ) -> ToolExecutionResult:
+        """Handle reduce_quantity tool."""
+        try:
+            # Parse item details
+            name = HebrewText(arguments['item_name'])
+            step = arguments.get('step', 1)  # Default to 1 if not specified
+            list_name = arguments.get('list_name')
+            
+            # Resolve item name to ID
+            item_result = self.tool_service.resolve_item(str(name), list_name)
+            if not item_result.success:
+                return ToolExecutionResult.from_error(ToolExecutionError(
+                    item_result.error,
+                    suggestions=item_result.suggestions
+                ))
+            
+            # Get item location
+            item_id, location = item_result.data
+            
+            # Reduce the quantity
+            result = self.item_service.reduce_quantity(item_id, step=step)
+            
+            if not result.success:
+                return ToolExecutionResult.from_error(ToolExecutionError(
+                    result.error,
+                    suggestions=result.suggestions
+                ))
+            
+            return ToolExecutionResult(
+                success=True,
+                message=f"הורדתי {step} {name}",
+                data={'item': result.data}
+            )
+            
+        except Exception as e:
+            self.logger.exception("Failed to reduce item quantity")
+            return ToolExecutionResult.from_exception(e)
+
     async def _handle_mark_bought(
         self,
         arguments: Dict[str, Any],
@@ -352,14 +388,9 @@ class ToolExecutor:
             # Parse item details
             name = HebrewText(arguments['item_name'])
             list_name = arguments.get('list_name')
-            is_bought = arguments.get('is_bought', True)
             
             # Resolve item name to ID
-            item_result = self.tool_service.resolve_item(
-                str(name),
-                list_name,
-                include_bought=True
-            )
+            item_result = self.tool_service.resolve_item(str(name), list_name)
             if not item_result.success:
                 return ToolExecutionResult.from_error(ToolExecutionError(
                     item_result.error,
@@ -370,30 +401,23 @@ class ToolExecutor:
             item_id, location = item_result.data
             result = self.item_service.mark_bought(
                 item_id=item_id,
-                is_bought=is_bought
+                is_bought=True
             )
             
             if not result.success:
                 return ToolExecutionResult.from_error(ToolExecutionError(
-                    result.error or "שגיאה בסימון פריט",
+                    result.error,
                     suggestions=result.suggestions
                 ))
             
-            status = "נקנה" if is_bought else "לא נקנה"
             return ToolExecutionResult(
                 success=True,
-                message=f"סימנתי את {name} כ{status}",
-                data={
-                    'item': {
-                        'id': result.data.id,
-                        'name': result.data.name,
-                        'is_bought': result.data.is_bought
-                    }
-                }
+                message=f"סימנתי {name} כנקנה",
+                data={'item': result.data}
             )
             
         except Exception as e:
-            self.logger.exception("Failed to mark item")
+            self.logger.exception("Failed to mark item as bought")
             return ToolExecutionResult.from_exception(e)
 
     async def _handle_create_list(
@@ -403,24 +427,20 @@ class ToolExecutor:
     ) -> ToolExecutionResult:
         """Handle create_list tool."""
         try:
-            name = HebrewText(arguments['name'])
+            # Create the list
+            name = arguments['list_name']
+            result = self.list_service.create_list(name)
             
-            result = self.list_service.create_list(str(name))
-            
-            if not result.success or not result.data:
+            if not result.success:
                 return ToolExecutionResult.from_error(ToolExecutionError(
-                    result.error or "שגיאה ביצירת רשימה",
+                    result.error,
                     suggestions=result.suggestions
                 ))
             
             return ToolExecutionResult(
                 success=True,
-                data={
-                    'list': {
-                        'id': result.data.id,
-                        'name': result.data.name
-                    }
-                }
+                message=f"יצרתי רשימה חדשה: {name}",
+                data={'list': result.data}
             )
             
         except Exception as e:
@@ -434,61 +454,42 @@ class ToolExecutor:
     ) -> ToolExecutionResult:
         """Handle show_list tool."""
         try:
-            list_id = arguments.get('list_id')
+            # Get list name (or use default)
+            list_name = arguments.get('list_name')
             include_bought = arguments.get('include_bought', True)
             
-            result = self.list_service.show_list(
-                list_id=list_id,
+            # Get list items
+            result = self.list_service.get_list_items(
+                list_name=list_name,
                 include_bought=include_bought
             )
             
-            if not result.success or not result.data:
+            if not result.success:
                 return ToolExecutionResult.from_error(ToolExecutionError(
-                    result.error or "שגיאה בהצגת רשימה",
+                    result.error,
                     suggestions=result.suggestions
                 ))
             
             return ToolExecutionResult(
                 success=True,
-                data={
-                    'list': {
-                        'id': result.data.id,
-                        'name': result.data.name,
-                        'items': [
-                            {
-                                'id': item.id,
-                                'name': item.name,
-                                'quantity': item.quantity,
-                                'unit': item.unit,
-                                'is_bought': item.is_bought
-                            }
-                            for item in result.data.items
-                        ]
-                    }
-                }
+                message="הנה הרשימה שביקשת",
+                data={'items': result.data}
             )
             
         except Exception as e:
             self.logger.exception("Failed to show list")
             return ToolExecutionResult.from_exception(e)
 
-    def _handle_validation_error(
-        self,
-        error: PydanticValidationError
-    ) -> ToolExecutionResult:
-        """Handle Pydantic validation errors."""
-        self.logger.error(
-            "Validation error",
-            errors=error.errors()
-        )
+    def _handle_validation_error(self, e: PydanticValidationError) -> ToolExecutionResult:
+        """Handle validation errors."""
         return ToolExecutionResult.from_error(ToolExecutionError(
-            "הערכים שסופקו אינם תקינים",
-            suggestions=["בדוק את הערכים ונסה שוב"]
+            "נתונים לא תקינים",
+            suggestions=["וודא שכל השדות הנדרשים מלאים"]
         ))
 
-    def _handle_ambiguous_input(
-        self,
-        error: AmbiguousInputError
-    ) -> ToolExecutionResult:
+    def _handle_ambiguous_input(self, e: AmbiguousInputError) -> ToolExecutionResult:
         """Handle ambiguous input errors."""
-        return ToolExecutionResult.from_error(error) 
+        return ToolExecutionResult.from_error(ToolExecutionError(
+            str(e),
+            suggestions=e.suggestions
+        )) 

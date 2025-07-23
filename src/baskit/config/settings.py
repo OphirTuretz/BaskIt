@@ -55,7 +55,7 @@ class BaskItSettings(BaseSettings):
     LOG_FILE: Optional[Path] = DEFAULT_LOG_FILE
     LOG_FORMAT: str = "detailed"  # simple, detailed
     LOG_RETENTION_DAYS: int = 7
-    LOG_ROTATION_SIZE_MB: int = 10
+    LOG_ROTATION_SIZE_MB: int = 1  # Changed from 10 to 1
     
     # AI Feature Flags
     USE_MOCK_AI: bool = True

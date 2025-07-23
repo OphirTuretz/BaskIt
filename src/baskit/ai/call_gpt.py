@@ -164,9 +164,10 @@ Edge case strategy:
 7. Single product name → add_item.
 8. "קניתי X" → mark_bought.
 9. "תוסיף Y" or "תוסיף 3 Z" → increment_quantity or fallback to add_item.
-10. "תמחק X" → remove_item.
-11. "רשימה ל..." → create_list.
-12. "מה יש ב..." or "תראה את הרשימה" → show_list.
+10. "תוריד Y" or "תוריד 2 Z" → reduce_quantity.
+11. "תמחק X" → remove_item.
+12. "רשימה ל..." → create_list.
+13. "מה יש ב..." or "תראה את הרשימה" → show_list.
 
 Always prefer precision and never guess the tool.
 
@@ -192,6 +193,16 @@ User Input: "תוסיף 3 עגבניות"
   "tool_arguments": { 
     "item_name": "עגבניות", 
     "step": 3 
+  }
+}
+
+User Input: "תוריד 2 עגבניות"  
+→ Tool Call:
+{
+  "tool_name": "reduce_quantity",
+  "tool_arguments": { 
+    "item_name": "עגבניות", 
+    "step": 2 
   }
 }
 
