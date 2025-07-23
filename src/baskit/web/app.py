@@ -290,21 +290,22 @@ async def render_smart_input(
         st.session_state.smart_input = ""  # Clear input before rendering
         st.session_state.smart_input_submitted = False
     
-    col1, col2, col3 = st.columns([6, 2, 0.5])
-    
-    with col1:
-        user_input = st.text_input(
-            "",
-            placeholder="הקלד טקסט חופשי בעברית (למשל: 'טופו', 'קניתי עגבניות', 'תמחק עגבניות')",
-            key="smart_input"
-        )
-    
-    with col2:
-        submit = st.button(
-            "✨ עבד טקסט",
-            use_container_width=True,
-            type="primary"
-        )
+    with st.form("smart_input_form", clear_on_submit=False):
+        col1, col2, col3 = st.columns([6, 2, 0.5])
+        
+        with col1:
+            user_input = st.text_input(
+                "",
+                placeholder="הקלד טקסט חופשי בעברית (למשל: 'טופו', 'קניתי עגבניות', 'תמחק עגבניות')",
+                key="smart_input"
+            )
+        
+        with col2:
+            submit = st.form_submit_button(
+                "✨ עבד טקסט",
+                use_container_width=True,
+                type="primary"
+            )
 
     if submit and user_input:
         logger.info(
