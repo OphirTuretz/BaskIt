@@ -65,60 +65,47 @@ class ToolExecutor:
         tool_call: Dict[str, Any],
         context: GPTContext
     ) -> ToolExecutionResult:
-        """
-        Execute a tool call with error handling.
-        
-        Args:
-            tool_call: Tool call details from GPT
-            context: Current conversation context
-            
-        Returns:
-            Result of tool execution
-        """
+        """Execute a tool call."""
         try:
+            self.logger.info(
+                "Starting tool execution",
+                tool_call=tool_call,
+                context=context
+            )
+            
             tool_name = tool_call['name']
             arguments = tool_call['arguments']
             
-            handler = self.handlers.get(tool_name)
-            if not handler:
-                return ToolExecutionResult.from_error(ToolExecutionError(
-                    f"כלי לא נתמך: {tool_name}",
-                    suggestions=["נסה להשתמש בכלי אחר"]
-                ))
-            
             self.logger.info(
-                "Executing tool",
-                tool=tool_name,
+                "Tool call parsed",
+                tool_name=tool_name,
                 arguments=arguments
             )
             
-            # Execute with timeout
-            try:
-                async with asyncio.timeout(self.tool_timeout):
-                    result = await handler(arguments, context)
-            except asyncio.TimeoutError:
-                return ToolExecutionResult.from_error(ToolExecutionError(
-                    "פעולה ארכה יותר מדי זמן",
-                    suggestions=["נסה שוב", "פצל את הפעולה לחלקים קטנים יותר"]
-                ))
+            # Get handler method
+            handler = getattr(self, f'_handle_{tool_name}', None)
+            if not handler:
+                self.logger.error(
+                    "No handler found for tool",
+                    tool_name=tool_name
+                )
+                return ToolExecutionResult.from_error(
+                    ToolExecutionError(
+                        f'כלי לא נתמך: {tool_name}',
+                        suggestions=["השתמש בכלי מהרשימה המאושרת"]
+                    )
+                )
             
-            self.logger.info(
-                "Tool execution completed",
-                tool=tool_name,
-                success=result.success
-            )
-            
-            return result
-            
+            # Execute handler
+            return await handler(arguments, context)
         except Exception as e:
-            # Try to handle known error types
-            for error_type, handler in self.error_handlers.items():
-                if isinstance(e, error_type):
-                    return handler(e)
-            
-            # Fall back to generic error handling
-            self.logger.exception("Tool execution failed")
-            return ToolExecutionResult.from_exception(e)
+            self.logger.exception(
+                "Tool execution failed",
+                error=str(e)
+            )
+            return ToolExecutionResult.from_error(
+                ToolExecutionError(str(e))
+            )
 
     async def _handle_add_item(
         self,
@@ -149,30 +136,30 @@ class ToolExecutor:
                 item_result = self.tool_service.resolve_item(str(name), list_name)
                 if item_result.success:
                     if self.auto_merge:
-                        # Update existing item
+                        # Update existing item through the update handler
                         item_id, location = item_result.data
-                        result = self.item_service.update_item(
+                        self.logger.info(
+                            "Found duplicate item, preparing to update",
                             item_id=item_id,
-                            quantity=location.quantity + quantity.value,
+                            location=location,
+                            quantity=quantity.value,
                             unit=quantity.unit
                         )
-                        if not result.success:
-                            return ToolExecutionResult.from_error(ToolExecutionError(
-                                result.error or "שגיאה בעדכון פריט",
-                                suggestions=result.suggestions
-                            ))
-                        return ToolExecutionResult(
-                            success=True,
-                            message=f"עדכנתי את הכמות של {name}",
-                            data={
-                                'item': {
-                                    'id': result.data.id,
-                                    'name': result.data.name,
-                                    'quantity': result.data.quantity,
-                                    'unit': result.data.unit
-                                }
+                        # Create a proper tool call structure
+                        update_tool_call = {
+                            'name': 'update_quantity',
+                            'arguments': {
+                                'item_name': str(name),
+                                'quantity': location.quantity + quantity.value,
+                                'unit': quantity.unit,
+                                'list_name': list_name
                             }
+                        }
+                        self.logger.info(
+                            "Calling update_quantity with arguments",
+                            tool_call=update_tool_call
                         )
+                        return await self.execute(update_tool_call, context)
                     else:
                         return ToolExecutionResult.from_error(ToolExecutionError(
                             f"פריט בשם '{name}' כבר קיים",
@@ -272,16 +259,42 @@ class ToolExecutor:
         context: GPTContext
     ) -> ToolExecutionResult:
         """Handle update_quantity tool."""
+        self.logger.info(
+            "Handling update_quantity",
+            arguments=arguments
+        )
         try:
+            # Get list (default or specified)
+            list_name = arguments.get('list_name')
+            list_result = self.tool_service.resolve_list(list_name)
+            if not list_result.success:
+                self.logger.error(
+                    "Failed to resolve list",
+                    list_name=list_name,
+                    error=list_result.error
+                )
+                return ToolExecutionResult.from_error(ToolExecutionError(
+                    list_result.error,
+                    suggestions=list_result.suggestions
+                ))
+            list_id = list_result.data
+            
             # Parse item details
             name = HebrewText(arguments['item_name'])
-            quantity = arguments.get('quantity')
-            unit = arguments.get('unit')
-            list_name = arguments.get('list_name')
+            quantity = Quantity(
+                value=arguments.get('quantity'),
+                unit=arguments.get('unit')
+            )
             
             # Resolve item name to ID
             item_result = self.tool_service.resolve_item(str(name), list_name)
             if not item_result.success:
+                self.logger.error(
+                    "Failed to resolve item",
+                    item_name=str(name),
+                    list_name=list_name,
+                    error=item_result.error
+                )
                 return ToolExecutionResult.from_error(ToolExecutionError(
                     item_result.error,
                     suggestions=item_result.suggestions
@@ -291,16 +304,27 @@ class ToolExecutor:
             item_id, location = item_result.data
             result = self.item_service.update_item(
                 item_id=item_id,
-                quantity=quantity,
-                unit=unit
+                quantity=quantity.value,
+                unit=quantity.unit
             )
             
             if not result.success:
+                self.logger.error(
+                    "Failed to update item quantity",
+                    item_id=item_id,
+                    error=result.error
+                )
                 return ToolExecutionResult.from_error(ToolExecutionError(
                     result.error or "שגיאה בעדכון כמות",
                     suggestions=result.suggestions
                 ))
             
+            self.logger.info(
+                "Item quantity updated",
+                item_id=item_id,
+                new_quantity=quantity.value,
+                new_unit=quantity.unit
+            )
             return ToolExecutionResult(
                 success=True,
                 message=f"עדכנתי את הכמות של {name} ל-{quantity}",
