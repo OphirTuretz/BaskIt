@@ -135,3 +135,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## 🔒 Security
 
 The application uses environment variables for sensitive configuration like API keys. Never commit your `.env` file or expose your API keys. Always use `.env.example` as a template.
+
+## BaskIt Team
+
+Carmel Sagi, Ophir Turetz, Anna Rice
